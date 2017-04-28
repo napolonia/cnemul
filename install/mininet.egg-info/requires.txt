@@ -1,0 +1,4 @@
+setuptools
+urllib3
+docker-py==1.7.1
+pytest
