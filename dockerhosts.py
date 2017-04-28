@@ -631,20 +631,19 @@ def allocate_peers(G, sources, num, time):
     return p
 
 def allocate_links(G, sources, peers, num, time):
-    l = []
+    l = set()
     #From the edges already created (physical)
-    edges = G.edges()
-    import pdb; pdb.set_trace()
 
-    for p in peers:
-	for pt in p[1]: 
-		print G.edges(pt)
-		l.append(G.edges(pt))
+    for i in sources: l.add(i)
 
+    for i in peers:
+	for j in i[1]:
+		l.add(j)
 
-    return l
+    sg = G.subgraph(l)
+    return sg.edges(), sg
 
-def create_workload(G, type):
+def create_workload(G, type, show=False):
     wl = []
     
     #Given a Graph G(n,v) and type
@@ -653,14 +652,14 @@ def create_workload(G, type):
 
     # allocate sources for given service
     sources = allocate_source(G, len(G.nodes()), timetype)
-    print sources
+    #print sources
 
     # allocate peers for a given service
     peers = allocate_peers(G, sources, len(G.nodes()), timetype)
-    print peers
+    #print peers
 
     # allocate links between peers and sources
-    links = allocate_links(G, sources, peers, len(G.nodes()), timetype)
+    links, sg = allocate_links(G, sources, peers, len(G.nodes()), timetype)
 
     ## Now we have Graph, sources, peers for each source
     import matplotlib.pyplot as plt
@@ -668,25 +667,38 @@ def create_workload(G, type):
     #positions for each source
     sPos = []
     pPos = []
+    spPos = []
+    tmpPos = []
+    #stmp = set()
+
     for i in sources: sPos.append(G.nodes(data=True)[i])
-    for i in peers: 
-	for j in i[1]: pPos.append(G.nodes(data=True)[j])
+    #pdb.set_trace()
     
-    pdb.set_trace()
+    for i in peers:
+	tmpPos = [] 
+	for j in i[1]:
+		tmpPos.append(G.nodes(data=True)[j])
+		pPos.append(G.nodes(data=True)[j])
+	spPos.append([i[0], tmpPos])
+    
     plt.ion()
     fig = plt.figure()
     #nx.draw(G, pos=nx.get_node_attributes(G,'pos'))
     #fig.add_axes([0,500])
-    for tmp in sPos: plt.scatter(tmp[1]['pos'][0], tmp[1]['pos'][1], s=100, marker='o', color='r')
-    for tmp in pPos: plt.scatter(tmp[1]['pos'][0], tmp[1]['pos'][1], s=100, marker='x', color='g')
-    #import networkx as nx; nx.draw_networkx_edges(G.edges(), pos=nx.get_node_attributes(G,'pos'))
-    plt.show(block=True)
+    import networkx as nx; nx.draw_networkx_edges(sg, pos=nx.get_node_attributes(G,'pos'))
+    for tmp in sPos: 
+	plt.scatter(tmp[1]['pos'][0], tmp[1]['pos'][1], s=100, marker='o', color='blue')
+	plt.annotate("S%d" % tmp[0], (tmp[1]['pos'][0], tmp[1]['pos'][1]), fontsize=15, fontweight='bold', color='red')
+    for tmp in pPos: 
+	plt.scatter(tmp[1]['pos'][0], tmp[1]['pos'][1], s=100, marker='x', color='black')
+	plt.annotate("P%d" % tmp[0], (tmp[1]['pos'][0], tmp[1]['pos'][1]), fontsize=15, fontweight='bold', color='green')
+    plt.show(block=show)
 
     
     #allocate_links
     # PUT IT TO RUN on sim!
 
-    return wl			
+    return sPos,spPos, links
 
 def start_network(net):
     info('\n*** Starting network\n')
@@ -1114,6 +1126,19 @@ def showGraph(G, list, net, num):
 
     plt.draw()
 
+def save_workload(sPos, pPos, wl, path, file='workload_save.wss'):
+	file = path + file
+
+	with open(file, "w+") as wf:
+		#nodes = swg.nodes(data=True) ## nodes data
+		#edges = swg.edges(data=True) ## edges for each node
+		## Saving to file Nodes and edges
+		wf.write("sources = %s\n" % sPos)
+		wf.write("peers = %s\n" % pPos)
+		wf.write("links = %s\n" % wl)
+		wf.flush()
+		
+
 def str2bool(v):
 	return v.lower() in ("yes", "true", "t", "1", "y","quit","q")
 
@@ -1224,6 +1249,10 @@ if __name__ == '__main__':
 					files.append(f)
 
 		if len(files):
+			for f in files:
+				swg = load_G_from_file(save_to + f, show=True)
+				sPos,pPos,wl = create_workload(swg, type)
+				save_workload(sPos,pPos,wl, save_to, file=f)
 			print files
 			print "Not implemented yet"
 			sys.exit()
@@ -1231,8 +1260,9 @@ if __name__ == '__main__':
 		
 		swg = load_G_from_file(save_to + file, show=True) ## SHOW only for debug
 		# do num_w times
-		wwg = create_workload(swg, type)
-		
+		sPos,pPos,wl = create_workload(swg, type, show=True)
+		save_workload(sPos,pPos,wl, save_to)
+
 		sys.exit()
  
    	if opt == '-h':
